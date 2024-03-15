@@ -76,7 +76,9 @@ std::ostream& operator<<(std::ostream& stream, const Quad& quad)
   return stream << "(" << quad.indices[0] << "," << quad.indices[1] << "," << quad.indices[2] << "," << quad.indices[3] << ")";
 }
 
-SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence)
+SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence, double timeLimit,
+  int& numVariables, int& numFixedConstraints, int& numLazyConstraints, long& numNodes, double& finalDualBound,
+  double& firstLPDualboundRoot, double &time)
 {
   std::unordered_map<Quad, int> polynomial;
 
@@ -167,6 +169,7 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence)
   SCIP_CALL( SCIPcreate(&scip) );
   SCIP_CALL( SCIPincludeDefaultPlugins(scip) );
   SCIP_CALL( SCIPcreateProbBasic(scip, "LABS mono") );
+  SCIP_CALL( SCIPsetRealParam(scip, "limits/time", timeLimit) );
 
   std::vector<SCIP_VAR*> xVars(N, NULL);
   for (int i = 0; i < N; ++i)
@@ -230,9 +233,16 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence)
   }
 
   optimalSequence.clear();
+  numVariables = SCIPgetNOrigVars(scip);
+  numFixedConstraints = SCIPgetNOrigConss(scip);
+  numLazyConstraints = 0;
 
   SCIP_CALL( SCIPsolve(scip) );
 
+  time = SCIPgetTotalTime(scip);
+  numNodes = SCIPgetNNodes(scip);
+  finalDualBound = SCIPgetDualbound(scip);
+  firstLPDualboundRoot = SCIPgetFirstLPDualboundRoot(scip);
   SCIP_SOL* bestSol = SCIPgetBestSol(scip);
 
   optimalSequence.resize(N);
@@ -248,13 +258,16 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence)
   return SCIP_OKAY;
 }
 
-SCIP_RETCODE solveValue(int N, int R, std::vector<int>& optimalSequence, bool modelProduct)
+SCIP_RETCODE solveValue(int N, int R, std::vector<int>& optimalSequence, bool modelProduct, double timeLimit,
+  int& numVariables, int& numFixedConstraints, int& numLazyConstraints, long& numNodes, double& finalDualBound,
+  double& firstLPDualboundRoot, double &time)
 {
   /* Create the model. */
   SCIP* scip = NULL;
   SCIP_CALL( SCIPcreate(&scip) );
   SCIP_CALL( SCIPincludeDefaultPlugins(scip) );
   SCIP_CALL( SCIPcreateProbBasic(scip, modelProduct ? "LABS value-prod" : "LABS value-same") );
+  SCIP_CALL( SCIPsetRealParam(scip, "limits/time", timeLimit) );
 
   /* x-variables: x_i = 0  <=> s_i = -1 */
 
@@ -452,11 +465,16 @@ SCIP_RETCODE solveValue(int N, int R, std::vector<int>& optimalSequence, bool mo
   }
 
   optimalSequence.clear();
+  numVariables = SCIPgetNOrigVars(scip);
+  numFixedConstraints = SCIPgetNOrigConss(scip);
+  numLazyConstraints = 0;
 
   SCIP_CALL( SCIPsolve(scip) );
 
-//   SCIP_CALL( SCIPwriteOrigProblem(scip, "debug.lp", NULL, FALSE) );
-
+  time = SCIPgetTotalTime(scip);
+  numNodes = SCIPgetNNodes(scip);
+  finalDualBound = SCIPgetDualbound(scip);
+  firstLPDualboundRoot = SCIPgetFirstLPDualboundRoot(scip);
   SCIP_SOL* bestSol = SCIPgetBestSol(scip);
 
   optimalSequence.resize(N);
@@ -485,7 +503,9 @@ SCIP_RETCODE solveValue(int N, int R, std::vector<int>& optimalSequence, bool mo
   return SCIP_OKAY;
 }
 
-SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool cardinalityEquation)
+SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool cardinalityEquation, double timeLimit,
+  int& numVariables, int& numFixedConstraints, int& numLazyConstraints, long& numNodes, double& finalDualBound,
+  double& firstLPDualboundRoot, double &time)
 {
   /* Create the model. */
   SCIP* scip = NULL;
@@ -493,6 +513,7 @@ SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool c
   SCIP_CALL( SCIPincludeDefaultPlugins(scip) );
   SCIP_CALL( SCIPincludeObjConshdlr(scip, new ConshdlrLABSnogood(scip), TRUE) );
   SCIP_CALL( SCIPcreateProbBasic(scip, cardinalityEquation ? "LABS nogood+card" : "LABS nogood") );
+  SCIP_CALL( SCIPsetRealParam(scip, "limits/time", timeLimit) );
 
   /* x-variables: x_i = 0  <=> s_i = -1 */
 
@@ -527,6 +548,7 @@ SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool c
   }
 
   /* Cardinality constraints. */
+  numFixedConstraints = 0;
   if (cardinalityEquation)
   {
     for (int i = 0; i <= N-R; ++i)
@@ -541,6 +563,7 @@ SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool c
           SCIP_CALL( SCIPaddCoefLinear(scip, cons, iter.second, 1.0) );
         SCIP_CALL( SCIPaddCons(scip, cons) );
         SCIP_CALL( SCIPreleaseCons(scip, &cons) );
+        numFixedConstraints++;
       }
     }
   }
@@ -561,9 +584,16 @@ SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool c
   }
 
   optimalSequence.clear();
+  numVariables = SCIPgetNOrigVars(scip);
+  numLazyConstraints = 0;
 
   SCIP_CALL( SCIPsolve(scip) );
 
+  time = SCIPgetTotalTime(scip);
+  numNodes = SCIPgetNNodes(scip);
+  finalDualBound = SCIPgetDualbound(scip);
+  firstLPDualboundRoot = SCIPgetFirstLPDualboundRoot(scip);
+  numLazyConstraints = SCIPconshdlrGetNCutsApplied(SCIPfindConshdlr(scip, "LABSnogood"));
   SCIP_SOL* bestSol = SCIPgetBestSol(scip);
 
   optimalSequence.resize(N);
@@ -590,11 +620,12 @@ SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool c
 
 void printUsage(const char* binaryName)
 {
-  std::cerr << "Usage: " << binaryName << " N R METHOD\n";
+  std::cerr << "Usage: " << binaryName << " N R METHOD TIME-LIMIT\n";
   std::cerr << "Parameters:\n";
-  std::cerr << "  N      Length of sequence.\n";
-  std::cerr << "  R      Interaction range.\n";
-  std::cerr << "  METHOD MIP model to use among {mono,nogood,nogood+card,value-prod,value-same}.\n";
+  std::cerr << "  N          Length of sequence.\n";
+  std::cerr << "  R          Interaction range.\n";
+  std::cerr << "  METHOD     MIP model to use among {mono,nogood,nogood+card,value-prod,value-same}.\n";
+  std::cerr << "  TIME-LIMIT Time limit\n";
   std::cerr << std::flush;
 }
 
@@ -619,21 +650,41 @@ int main(int argc, char** argv)
     printUsage(argv[0]);
     return EXIT_FAILURE;
   }
+  double timeLimit = 1e20;
+  if (argc > 4 && (sscanf(argv[4], "%lf", &timeLimit) != 1 || timeLimit <= 0))
+  {
+    std::cerr << "Error: invalid time limit <" << argv[4] << ">.\n";
+    printUsage(argv[0]);
+    return EXIT_FAILURE;
+  }
+
   const std::string model = argv[3];
   SCIP_RETCODE retcode;
   std::vector<int> optimalSequence;
+  int numVariables;
+  int numFixedConstraints;
+  int numLazyConstraints;
+  double firstLPDualboundRoot;
+  double finalDualBound;
+  long numNodes;
+  double time;
   if (model == "mono")
   {
-    retcode = solveMonomials(N, R, optimalSequence);
+    retcode = solveMonomials(N, R, optimalSequence, timeLimit, numVariables, numFixedConstraints, numLazyConstraints,
+      numNodes, finalDualBound, firstLPDualboundRoot, time);
   }
   else if (model == "value-prod")
-    retcode = solveValue(N, R, optimalSequence, true);
+    retcode = solveValue(N, R, optimalSequence, true, timeLimit, numVariables, numFixedConstraints, numLazyConstraints,
+      numNodes, finalDualBound, firstLPDualboundRoot, time);
   else if (model == "value-same")
-    retcode = solveValue(N, R, optimalSequence, false);
+    retcode = solveValue(N, R, optimalSequence, false, timeLimit, numVariables, numFixedConstraints, numLazyConstraints,
+      numNodes, finalDualBound, firstLPDualboundRoot, time);
   else if (model == "nogood")
-    retcode = solveNogood(N, R, optimalSequence, false);
+    retcode = solveNogood(N, R, optimalSequence, false, timeLimit, numVariables, numFixedConstraints, numLazyConstraints,
+      numNodes, finalDualBound, firstLPDualboundRoot, time);
   else if (model == "nogood+card")
-    retcode = solveNogood(N, R, optimalSequence, true);
+    retcode = solveNogood(N, R, optimalSequence, true, timeLimit, numVariables, numFixedConstraints, numLazyConstraints,
+      numNodes, finalDualBound, firstLPDualboundRoot, time);
   else
   {
     std::cerr << "Error: invalid method <" << argv[3] << ">.\n";
@@ -665,7 +716,16 @@ int main(int argc, char** argv)
       objective += C*C;
     }
   }
-  std::cout << "Contribution: " << objective << std::endl;
+  std::cout << "Sequence length: " << N << std::endl;
+  std::cout << "Interaction range: " << N << std::endl;
+  std::cout << "Model: " << model << std::endl;
+  std::cout << "Primal bound: " << objective << std::endl;
+  std::cout << "Dual bound: " << finalDualBound << std::endl;
+  std::cout << "LP dual bound: " << firstLPDualboundRoot << std::endl;
+  std::cout << "Time: " << time << std::endl;
+  std::cout << "#vars: " << numVariables << std::endl;
+  std::cout << "#fixed conss: " << numFixedConstraints << std::endl;
+  std::cout << "#lazy conss: " << numLazyConstraints << std::endl;
 
   return EXIT_SUCCESS;
 }
