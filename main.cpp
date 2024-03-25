@@ -712,7 +712,7 @@ int main(int argc, char** argv)
     }
   }
   std::cout << "Sequence length: " << N << std::endl;
-  std::cout << "Interaction range: " << N << std::endl;
+  std::cout << "Interaction range: " << R << std::endl;
   std::cout << "Model: " << model << std::endl;
   std::cout << "Primal bound: " << objective << std::endl;
   std::cout << "Dual bound: " << finalDualBound << std::endl;
