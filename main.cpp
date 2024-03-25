@@ -718,6 +718,7 @@ int main(int argc, char** argv)
   std::cout << "Dual bound: " << finalDualBound << std::endl;
   std::cout << "LP dual bound: " << firstLPDualboundRoot << std::endl;
   std::cout << "Time: " << time << std::endl;
+  std::cout << "Nodes: " << numNodes << std::endl;
   std::cout << "#vars: " << numVariables << std::endl;
   std::cout << "#fixed conss: " << numFixedConstraints << std::endl;
   std::cout << "#lazy conss: " << numLazyConstraints << std::endl;
