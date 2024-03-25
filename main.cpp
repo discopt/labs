@@ -4,6 +4,7 @@
 #include <ostream>
 #include <sstream>
 #include <vector>
+#include <set>
 
 #include <scip/scip.h>
 #include <scip/scipdefplugins.h>
@@ -93,50 +94,42 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence, dou
         for (int j2 = i; j2 <= i + R - 1 - d; ++j2)
         {
           /* We add (2x_{j1}-x_0) * (2x_{j1+d}-x_0) * (2x_{j2}-x_0) * (2x_{j2+d}-x_0) with x_0 = 1 */
+          std::set<int> productIndices;
           for (int choice = 0; choice < 16; ++choice)
           {
             int coefficient = 1;
-            int indices[4];
             if (choice & 1)
             {
-              indices[0] = j1;
+              productIndices.insert(j1);
               coefficient *= 2;
             }
             else
-            {
-              indices[0] = -1;
               coefficient *= -1;
-            }
             if (choice & 2)
             {
-              indices[1] = j1+d;
+              productIndices.insert(j1+d);
               coefficient *= 2;
             }
             else
-            {
-              indices[1] = -1;
               coefficient *= -1;
-            }
             if (choice & 4)
             {
-              indices[2] = j2;
+              productIndices.insert(j2);
               coefficient *= 2;
             }
             else
-            {
-              indices[2] = -1;
               coefficient *= -1;
-            }
             if (choice & 8)
             {
-              indices[3] = j2+d;
+              productIndices.insert(j2+d);
               coefficient *= 2;
             }
             else
-            {
-              indices[3] = -1;
               coefficient *= -1;
-            }
+            int indices[4] = { -1, -1, -1, -1 };
+            int degree = 0;
+            for (auto index : productIndices)
+              indices[degree++] = index;
             Quad quad(indices);
             auto iter = polynomial.find(quad);
             if (iter == polynomial.end())
@@ -163,6 +156,8 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence, dou
 
   std::cout << "After deleting " << zeroQuads.size() << ", the polynomial has " << polynomial.size() << " terms."
     << std::endl;
+//  for (auto iter : polynomial)
+//    std::cout << "  " << iter.first.indices[0] << ", " << iter.first.indices[1] << ", " << iter.first.indices[2] << ", " << iter.first.indices[3] << std::endl;
 
   /* Create the model. */
   SCIP* scip = NULL;
