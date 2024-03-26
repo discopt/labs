@@ -481,6 +481,8 @@ SCIP_RETCODE solveValue(int N, int R, std::vector<int>& optimalSequence, bool mo
   numNodes = SCIPgetNNodes(scip);
   finalDualBound = SCIPgetDualbound(scip);
   firstLPDualboundRoot = SCIPgetFirstLPDualboundRoot(scip);
+  if (SCIPisInfinity(scip, firstLPDualboundRoot))
+    firstLPDualboundRoot = finalDualBound;
   SCIP_SOL* bestSol = SCIPgetBestSol(scip);
 
   optimalSequence.resize(N);
@@ -599,6 +601,8 @@ SCIP_RETCODE solveNogood(int N, int R, std::vector<int>& optimalSequence, bool c
   numNodes = SCIPgetNNodes(scip);
   finalDualBound = SCIPgetDualbound(scip);
   firstLPDualboundRoot = SCIPgetFirstLPDualboundRoot(scip);
+  if (SCIPisInfinity(scip, firstLPDualboundRoot))
+    firstLPDualboundRoot = finalDualBound;
   numLazyConstraints = SCIPconshdlrGetNCutsApplied(SCIPfindConshdlr(scip, "LABSnogood"));
   SCIP_SOL* bestSol = SCIPgetBestSol(scip);
 
