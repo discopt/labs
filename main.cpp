@@ -130,12 +130,17 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence, dou
             int degree = 0;
             for (auto index : productIndices)
               indices[degree++] = index;
+            productIndices.clear();
             Quad quad(indices);
             auto iter = polynomial.find(quad);
             if (iter == polynomial.end())
               polynomial.insert(std::make_pair(quad, coefficient));
             else
-              polynomial[quad] += coefficient;
+            {
+              iter->second += coefficient;
+              if (iter->second == 0)
+                polynomial.erase(iter);
+            }
           }
         }
       }
@@ -234,10 +239,16 @@ SCIP_RETCODE solveMonomials(int N, int R, std::vector<int>& optimalSequence, dou
 
   SCIP_CALL( SCIPsolve(scip) );
 
+#ifndef NDEBUG
+  SCIP_CALL( SCIPwriteOrigProblem(scip, "mono.lp", NULL, FALSE) );
+#endif /* !NDEBUG */
+
   time = SCIPgetTotalTime(scip);
   numNodes = SCIPgetNNodes(scip);
   finalDualBound = SCIPgetDualbound(scip);
   firstLPDualboundRoot = SCIPgetFirstLPDualboundRoot(scip);
+  if (SCIPisInfinity(scip, firstLPDualboundRoot))
+    firstLPDualboundRoot = finalDualBound;
   SCIP_SOL* bestSol = SCIPgetBestSol(scip);
 
   optimalSequence.resize(N);
